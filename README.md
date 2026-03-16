@@ -1,3 +1,5 @@
+<img width="1024" height="1024" alt="1773688831929-019cf817-4514-76b0-8cbe-91b0dd8d75de" src="https://github.com/user-attachments/assets/7f4716b5-1700-4946-a518-9ec7c2377033" />
+
 # GoQueue
 
 **A lightweight, high-performance distributed task queue for Go.**
