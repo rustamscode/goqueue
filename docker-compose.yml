@@ -1,0 +1,90 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  goqueue-server:
+    build:
+      context: .
+      target: server
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_ADDR=redis:6379
+    command: ["-http", ":8080", "-redis", "redis:6379", "-log-level", "info"]
+
+  goqueue-worker:
+    build:
+      context: .
+      target: worker
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_ADDR=redis:6379
+    command: ["-redis", "redis:6379", "-concurrency", "10", "-log-level", "info"]
+    deploy:
+      replicas: 2
+
+  goqueue-producer:
+    build:
+      context: .
+      target: producer
+    depends_on:
+      redis:
+        condition: service_healthy
+      goqueue-worker:
+        condition: service_started
+    environment:
+      - REDIS_ADDR=redis:6379
+    command: ["-redis", "redis:6379", "-count", "100", "-interval", "100ms"]
+    profiles:
+      - demo
+
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    depends_on:
+      - goqueue-server
+
+  grafana:
+    image: grafana/grafana:10.3.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
